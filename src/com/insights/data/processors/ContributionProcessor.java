@@ -2,9 +2,9 @@ package com.insights.data.processors;
 
 import com.insights.data.models.Contribution;
 import com.insights.data.models.Donor;
+import com.insights.data.models.Recipient;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Created by Fen Li on 2/9/18.
@@ -12,82 +12,82 @@ import java.util.stream.Collectors;
 public class ContributionProcessor {
 
     private int percentile;
-    private Map<String, List<Contribution>> recipientToContributionList;
+    private Map<String, Recipient> recipientMap;
     private Set<Donor> repeatDonors;
     private Map<Donor, Date> donorToDate;
+    private Map<Donor, Set<Recipient>> donorToRecipientsMap;
 
     public ContributionProcessor(int percentile) {
         this.percentile = percentile;
-        this.recipientToContributionList = new HashMap<>();
+        this.recipientMap = new HashMap<>();
         this.repeatDonors = new HashSet<>();
         this.donorToDate = new HashMap<>();
+        donorToRecipientsMap = new HashMap<>();
     }
+
 
     public String insertNewContribution(Contribution contribution) {
-        if (recipientToContributionList.containsKey(contribution.getRecipient())) {
-            recipientToContributionList.get(contribution.getRecipient()).add(contribution);
+        Recipient recipient;
+        if (recipientMap.containsKey(contribution.getRecipient())) {
+            recipient = recipientMap.get(contribution.getRecipient());
         } else {
-            List<Contribution> list = new ArrayList<>();
-            list.add(contribution);
-            recipientToContributionList.put(contribution.getRecipient(), list);
+            recipient = new Recipient(contribution.getRecipient());
+            recipientMap.put(contribution.getRecipient(), recipient);
         }
 
-        if (isRepeatDonorDuringThisContribution(contribution.getDonor(), contribution.getTransactionDate())) {
-
-            List<Contribution> qualifiedContributions = getQualifiedContributions(
-                    contribution.getRecipient(),
-                    contribution.getTransactionDate().getYear(),
-                    contribution.getDonor().getZipCode()
-            );
-
-            return computeResult(qualifiedContributions,
-                    contribution.getRecipient(),
-                    contribution.getTransactionDate().getYear(),
-                    contribution.getDonor().getZipCode());
-
+        Donor donor = contribution.getDonor();
+        if (donorToRecipientsMap.containsKey(donor)) {
+            donorToRecipientsMap.get(donor).add(recipient);
         } else {
+            Set<Recipient> recipients = new HashSet<>();
+            recipients.add(recipient);
+            donorToRecipientsMap.put(donor, recipients);
+        }
+
+        int status = getDonorStatus(donor, contribution.getTransactionDate());
+
+        if (status < 0) {
+            // non repeat donor, only need to add the data to recipient's data store
+            recipient.insertContributionForNonRepeatDonor(contribution);
             return "";
+        } else if (status == 0) {
+            recipient.insertContributionForNonRepeatDonor(contribution);
+            // update all recipients that the donor is a repeat donor
+            Set<Recipient> impactedRecipients = donorToRecipientsMap.get(donor);
+            for (Recipient impactedRecipient: impactedRecipients) {
+                impactedRecipient.markDonorAsRepeat(donor);
+            }
+            return recipient.getAnswer(percentile, contribution.getDonor().getZipCode(), contribution.getTransactionDate().getYear());
+        } else {
+            // donor is already a repeat
+            recipient.insertContributionForRepeatDonor(contribution);
+            return recipient.getAnswer(percentile, contribution.getDonor().getZipCode(), contribution.getTransactionDate().getYear());
         }
-
     }
 
-    // question: if we find one donor in 2018, then 2017. we know he is a repeat but don't need to do anything for now.
-    // what if there is a third contribution in 2015?
-    private boolean isRepeatDonorDuringThisContribution(Donor donor, Date date) {
-        if (repeatDonors.contains(donor)) {
-            return true;
-        }
-        // if this is the first time we find this donor as repeat one, update state
+
+    // update donor date if it is earlier so we won't miss any repeat
+    private int getDonorStatus(Donor donor, Date date) {
         if (donorToDate.containsKey(donor)) {
-            repeatDonors.add(donor);
-            return donorToDate.get(donor).before(date);
+            boolean newDateIsLater = date.after(donorToDate.get(donor));
+            if (newDateIsLater) {
+                if (repeatDonors.contains(donor)) {
+                    return 1;
+                } else {
+                    // detect this donor as repeat for the first time
+                    repeatDonors.add(donor);
+                    return 0;
+                }
+            } else {
+                // TODO: although the date I found is earlier than previous contributions, but it is already in
+                // repeatDonors set. Should I return 1 or -1?
+                donorToDate.put(donor, date);
+                // TODO: do i need to insert donor to repeatDonors set in this case?
+                return -1;
+            }
         } else {
             donorToDate.put(donor, date);
-            return false;
+            return -1;
         }
-
-    }
-
-    private List<Contribution> getQualifiedContributions(String recipient, int year, String zipCode) {
-        if (recipientToContributionList.containsKey(recipient)) {
-            return recipientToContributionList.get(recipient).stream()
-                    .filter(contribution ->
-                            repeatDonors.contains(contribution.getDonor()) &&
-                            contribution.getTransactionDate().getYear() == year &&
-                            contribution.getDonor().getZipCode().equals(zipCode))
-                    .collect(Collectors.toList());
-        }
-        return new ArrayList<>();
-    }
-
-    private String computeResult(List<Contribution> contributions, String recipient, int year, String zipCode) {
-        float totalAmount = 0;
-        int totalCount = contributions.size();
-        int ordinalRank = (totalCount * percentile + 99)/ 100;
-        Collections.sort(contributions, Comparator.comparing(Contribution::getTransactionAmount));
-        for (Contribution contribution : contributions) {
-            totalAmount += contribution.getTransactionAmount();
-        }
-        return recipient+"|"+zipCode+"|"+year+"|"+contributions.get(ordinalRank-1).getTransactionAmount()+"|"+totalAmount+"|"+contributions.size();
     }
 }
