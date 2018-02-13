@@ -4,3 +4,5 @@
 #
 #python ./src/donation-analytics.py ./input/itcont.txt ./input/percentile.txt ./output/repeat_donors.txt
 
+javac ./src/com/insights/data/Main.java ./src/com/insights/data/models/*.java ./src/com/insights/data/processors/*.java ./src/com/insights/data/utils/*.java
+java -classpath ./src com/insights/data/Main ./input/itcont.txt ./input/percentile.txt ./output/repeat_donors.txt
