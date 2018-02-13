@@ -1,18 +1,18 @@
 package com.insights.data.models;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.InputMismatchException;
 
 /**
  * Created by Fen Li on 2/9/18.
  */
+// TODO: enhance the edge case check
 public class Contribution {
-    public static SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("MMddyyyy");
+    public static DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("MMddyyyy");
     private String recipient;
     private Donor donor;
-    private Date transactionDate;
+    private LocalDate transactionDate;
     private float transactionAmount;
 
     public Contribution(String record) throws InputMismatchException {
@@ -20,7 +20,7 @@ public class Contribution {
             throw new InputMismatchException("input record is null");
         }
         String[] data = record.split("\\|");
-        if (data == null || data.length != 21) {
+        if (data.length != 21) {
             throw new InputMismatchException("could not recognize the input format");
         }
         if (data[10].length() < 5) {
@@ -29,17 +29,36 @@ public class Contribution {
         if (!data[15].isEmpty()) {
             throw new InputMismatchException("not individual contribution");
         }
+        if (data[0].isEmpty()) {
+            throw new InputMismatchException("empty cmte_id");
+        }
         this.recipient = data[0];
+        if (data[7].isEmpty()) {
+            throw new InputMismatchException("empty name");
+        }
         this.donor = new Donor(data[7], data[10].substring(0, 5));
+        this.transactionDate = LocalDate.parse(data[13], DATE_FORMATTER);
+        if (this.transactionDate == null) {
+            throw new InputMismatchException("transaction date is invalid");
+        }
         try {
-            this.transactionDate = DATE_FORMAT.parse(data[13]);
             this.transactionAmount = Float.valueOf(data[14]);
-        } catch (ParseException | NumberFormatException ex) {
+        } catch (NumberFormatException ex) {
             throw new InputMismatchException("could not recognize the input format");
         }
     }
 
-    public Date getTransactionDate() {
+    // visible for testing purpose only
+    public Contribution(float transactionAmount) {
+        this.transactionAmount = transactionAmount;
+    }
+
+    // visible for testing purpose only
+    public Contribution(int recipientId) {
+        this.recipient = String.valueOf(recipientId);
+    }
+
+    public LocalDate getTransactionDate() {
         return transactionDate;
     }
 

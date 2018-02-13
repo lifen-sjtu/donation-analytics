@@ -7,14 +7,18 @@ import java.util.*;
  */
 public class Recipient {
     private String id;
-    // new to handle the case when caller calls markDonorAsRepeat first, then call insertContributionForRepeatDonor
-    private Map<String, List<Contribution>> repeatDonorContributionsMap;
+    // For contributions from repeat donor, the information we need is the list of contributions in a particular year
+    // and zipcode. so maintain a map whose key is zipcode|year to speed up the query
+    private Map<String, ContributionCollection> zipCodeYearToWrapperMapForRepeatDonor;
+
+    // For contributions from non-repeat donor, we need an easy way to convert them into repeat map once a certain donor
+    // is detected as repeat donor.
     private Map<Donor, List<Contribution>> nonRepeatDonorContributionsMap;
 
     public Recipient(String id) {
         this.id = id;
-        repeatDonorContributionsMap = new HashMap<>();
-        nonRepeatDonorContributionsMap = new HashMap<>();
+        this.nonRepeatDonorContributionsMap = new HashMap<>();
+        this.zipCodeYearToWrapperMapForRepeatDonor = new HashMap<>();
     }
 
     public void markDonorAsRepeat(Donor donor) {
@@ -27,12 +31,12 @@ public class Recipient {
 
     public void insertContributionForRepeatDonor(Contribution contribution) {
         String key = contribution.getDonor().getZipCode()+"|"+contribution.getTransactionDate().getYear();
-        if (repeatDonorContributionsMap.containsKey(key)) {
-            repeatDonorContributionsMap.get(key).add(contribution);
+        if (zipCodeYearToWrapperMapForRepeatDonor.containsKey(key)) {
+            zipCodeYearToWrapperMapForRepeatDonor.get(key).insertNewContribution(contribution);
         } else {
-            List<Contribution> contributions = new ArrayList<>();
-            contributions.add(contribution);
-            repeatDonorContributionsMap.put(key, contributions);
+            ContributionCollection contributionCollection = new ContributionCollection();
+            contributionCollection.insertNewContribution(contribution);
+            zipCodeYearToWrapperMapForRepeatDonor.put(key, contributionCollection);
         }
     }
 
@@ -47,20 +51,14 @@ public class Recipient {
         }
     }
 
-    public String getAnswer(int percentile, String zipCode, int year) {
+    public String getContributionStatsFromRepeatDonor(int percentile, String zipCode, int year) {
         String key = zipCode+"|"+year;
-        List<Contribution> contributions = repeatDonorContributionsMap.get(key);
-        if (contributions == null) {
-            return "";
+        ContributionCollection contributionCollection = zipCodeYearToWrapperMapForRepeatDonor.get(key);
+        if (contributionCollection == null) {
+            return null;
         } else {
-            float totalAmount = 0;
-            int totalCount = contributions.size();
-            int ordinalRank = (totalCount * percentile + 99)/ 100;
-            Collections.sort(contributions, Comparator.comparing(Contribution::getTransactionAmount));
-            for (Contribution contribution : contributions) {
-                totalAmount += contribution.getTransactionAmount();
-            }
-            return this.id+"|"+key+"|"+contributions.get(ordinalRank-1).getTransactionAmount()+"|"+totalAmount+"|"+contributions.size();
+            return this.id+"|"+key+"|"+ contributionCollection.getAmountAtPercentile(percentile)+
+                "|"+ contributionCollection.getTotalAmount()+"|"+ contributionCollection.getTotalCount();
         }
 
     }

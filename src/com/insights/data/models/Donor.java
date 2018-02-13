@@ -6,6 +6,7 @@ package com.insights.data.models;
 public class Donor {
     private String name;
     private String zipCode;
+
     public Donor(String name, String zipCode) {
         this.name = name;
         this.zipCode = zipCode;
