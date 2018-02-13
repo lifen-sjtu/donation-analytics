@@ -14,24 +14,26 @@ import java.util.InputMismatchException;
 public class Main {
 
     public static void main(String[] args) {
-        String itcont = args[0];
-        String percentileFile = args[1];
-        String outputFile = args[2];
-        String line;
+        String itcontFilePath = args[0];
+        String percentileFilePath = args[1];
+        String outputFilePath = args[2];
+
         try {
-            FileReader percentileReader = new FileReader(percentileFile);
+            FileReader percentileReader = new FileReader(percentileFilePath);
             BufferedReader percentileBuffer = new BufferedReader(percentileReader);
             int percentile = Integer.valueOf(percentileBuffer.readLine());
             percentileReader.close();
-            FileReader fileReader = new FileReader(itcont);
-            BufferedReader bufferedReader = new BufferedReader(fileReader);
-            File fout = new File(outputFile);
+            ContributionProcessor contributionProcessor = new ContributionProcessor(percentile);
+
+            FileReader itcontFileReader = new FileReader(itcontFilePath);
+            BufferedReader itcontBuffer = new BufferedReader(itcontFileReader);
+
+            File fout = new File(outputFilePath);
             FileOutputStream fos = new FileOutputStream(fout);
             BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(fos));
 
-            ContributionProcessor contributionProcessor = new ContributionProcessor(percentile);
-
-            while ((line = bufferedReader.readLine()) != null) {
+            String line;
+            while ((line = itcontBuffer.readLine()) != null) {
                 try {
                     Contribution contribution = new Contribution(line);
                     String result = contributionProcessor.processNewContribution(contribution);
@@ -39,12 +41,11 @@ public class Main {
                         bw.write(result);
                         bw.newLine();
                     }
-
                 } catch (InputMismatchException ex) {
                     // simply skip invalid input contribution record
                 }
             }
-            fileReader.close();
+            itcontFileReader.close();
             bw.close();
         } catch (IOException ex) {
             System.out.println("unable to read or write file ");

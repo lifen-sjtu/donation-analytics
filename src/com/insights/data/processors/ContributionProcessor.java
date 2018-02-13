@@ -8,7 +8,8 @@ import com.insights.data.models.Recipient;
 import java.util.*;
 
 /**
- * Created by Fen Li on 2/9/18.
+ * Contribution processor handles the main logic of reading a contribution from stream and return the expected output
+ * to print. It mainly delegates to {@link DonorProcessor} and {@link RecipientProcessor} to handle domain specific logic.
  */
 public class ContributionProcessor {
 
@@ -23,6 +24,11 @@ public class ContributionProcessor {
     }
 
 
+    /**
+     * process a contribution from input stream
+     * @param contribution the input from main class
+     * @return the expected string if this is from a valid repeat donor, null otherwise.
+     */
     public String processNewContribution(Contribution contribution) {
         Recipient recipient = recipientProcessor.getRecipientByContribution(contribution);
         Donor donor = contribution.getDonor();
